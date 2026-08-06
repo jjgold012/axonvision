@@ -24,9 +24,6 @@ def blur_contours(frame, contours, block_size=10):
     result = frame.copy()
     for c in contours:
         x, y, w, h = cv2.boundingRect(c)
-        # Skip if ROI is too small
-        if w < 2 or h < 2:
-            continue
         # Extract ROI, pixelate it by resizing down and back up, and put it back
         roi = result[y:y+h, x:x+w]
         small = cv2.resize(roi, (max(1, w // block_size), max(1, h // block_size)), interpolation=cv2.INTER_LINEAR)
@@ -68,7 +65,7 @@ def run_presenter(input_queue: mp.Queue, blur: bool = False) -> None:
 
             # Display frame
             cv2.imshow("Motion Detection", frame)
-            cv2.waitKey(33)  # ~30 FPS
+            cv2.waitKey(35)  # ~25 FPS
 
 
     except KeyboardInterrupt:
