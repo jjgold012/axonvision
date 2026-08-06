@@ -56,12 +56,18 @@ def main():
 
     processes = [streamer_proc, detector_proc, presenter_proc]
 
-    # Handle graceful shutdown on SIGINT (Ctrl+C)
-    def signal_handler(_signum, _frame):
-        print("\n[Main] Received interrupt signal, shutting down...")
+    # Handle graceful shutdown on SIGINT (Ctrl+C) and SIGTERM
+    def shutdown():
+        """Terminate all processes and wait for them to exit."""
+        print("\n[Main] Shutting down...")
         for p in processes:
             if p.is_alive():
                 p.terminate()
+        for p in processes:
+            p.join(timeout=2)
+
+    def signal_handler(_signum, _frame):
+        shutdown()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -78,16 +84,9 @@ def main():
     # Detector consumes all queued frames -> forwards sentinel -> exits.
     # Presenter consumes all queued frames -> exits.
     print("[Main] All processes running. Waiting for completion...")
-    try:
-        for p in processes:
-            p.join()
-            print(f"[Main] {p.name} exited (code: {p.exitcode})")
-    except KeyboardInterrupt:
-        print("\n[Main] Keyboard interrupt received")
-        for p in processes:
-            if p.is_alive():
-                p.terminate()
-                p.join(timeout=2)
+    for p in processes:
+        p.join()
+        print(f"[Main] {p.name} exited (code: {p.exitcode})")
 
     print("[Main] All processes completed. Goodbye!")
 

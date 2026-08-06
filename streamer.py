@@ -16,12 +16,11 @@ def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
 
     cap = cv2.VideoCapture(video_path)
 
-    if not cap.isOpened():
-        print(f"[Streamer] Error: Could not open video {video_path}")
-        output_queue.put(SENTINEL)
-        return
-
     try:
+        if not cap.isOpened():
+            print(f"[Streamer] Error: Could not open video {video_path}")
+            return
+
         while True:
             # Read next frame
             ret, frame = cap.read()
@@ -36,7 +35,6 @@ def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
             # Send frame to detector
             output_queue.put((frame, time_ms))
 
-
     except KeyboardInterrupt:
         print("[Streamer] Interrupted")
     except Exception as e:
@@ -46,4 +44,3 @@ def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
         print("[Streamer] Sending sentinel and exiting")
         output_queue.put(SENTINEL)
         cap.release()
-        cv2.destroyAllWindows()

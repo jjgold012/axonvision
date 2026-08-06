@@ -16,7 +16,7 @@ def format_time(time_ms):
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def blur_contours(frame, contours, block_size=15):
+def blur_contours(frame, contours, block_size=5):
     """Pixelate the bounding box regions of the given contours (efficient ROI-based)."""
     if not contours:
         return frame
@@ -75,8 +75,6 @@ def run_presenter(input_queue: mp.Queue, blur: bool = False) -> None:
         print("[Presenter] Interrupted")
     except Exception as e:
         print(f"[Presenter] Error: {e}")
-        import traceback
-        traceback.print_exc()
     finally:
         print("[Presenter] Cleaning up and exiting")
         cv2.destroyAllWindows()

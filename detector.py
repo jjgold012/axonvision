@@ -67,13 +67,9 @@ def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
             except mp.queues.Full:
                 continue
 
-
     except KeyboardInterrupt:
         print("[Detector] Interrupted")
     except Exception as e:
         print(f"[Detector] Error: {e}")
-        import traceback
-        traceback.print_exc()
     finally:
         print("[Detector] Exiting")
-        cv2.destroyAllWindows()
