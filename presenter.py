@@ -16,7 +16,7 @@ def format_time(time_ms):
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def blur_contours(frame, contours, block_size=5):
+def blur_contours(frame, contours, block_size=10):
     """Pixelate the bounding box regions of the given contours (efficient ROI-based)."""
     if not contours:
         return frame

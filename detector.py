@@ -55,15 +55,12 @@ def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
             cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             cnts = imutils.grab_contours(cnts)
 
-            # Filter contours by minimum area
-            filtered_contours = [c for c in cnts if cv2.contourArea(c) >= 500]
-
             # Update previous frame
             prev_frame = gray_frame
 
             # Send frame with detected contours to presenter
             try:
-                output_queue.put((frame, time_ms, filtered_contours), timeout=1.0)
+                output_queue.put((frame, time_ms, cnts), timeout=1.0)
             except mp.queues.Full:
                 continue
 

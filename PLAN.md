@@ -4,15 +4,15 @@
 A Python multiprocessing application with three processes:
 1. **Streamer** - Reads video frames and sends to Detector
 2. **Detector** - Performs motion detection using pyimagesearch algorithm
-3. **Presenter** - Receives frames + detections, draws bounding boxes, displays
+3. **Presenter** - Receives frames + detections, draws/blurs contours, displays
 
 ## Architecture
 
 ```
 ┌─────────────┐     Queue      ┌─────────────┐     Queue      ┌─────────────┐
-│  Streamer   │ ─────────────▶ │  Detector   │ ─────────────▶ │  Presenter  │
+│  Streamer   │ ────────────▶ │  Detector   │ ────────────▶ │  Presenter  │
 │  (Process)  │  (frame,       │  (Process)  │  (frame,       │  (Process)  │
-│             │   frame_num)   │             │   boxes)       │             │
+│             │   time_ms)      │             │   contours)     │             │
 └─────────────┘                └─────────────┘                └─────────────┘
 ```
 
@@ -20,32 +20,36 @@ A Python multiprocessing application with three processes:
 
 ### 1. Streamer Process (`streamer.py`)
 - Opens video file using `cv2.VideoCapture`
+- If video cannot be opened: prints error and returns (sentinel sent via `finally`)
 - Reads frames in a loop
-- Sends `(frame, frame_number)` tuples to detector queue
-- Sends `None` sentinel to signal completion
+- Sends `(frame, time_ms)` tuples to detector queue
+- On end of video or error: sends `None` (SENTINEL) sentinel via `finally` block
+- Cleanup in `finally`: sends sentinel, releases `cv2.VideoCapture`
 
 ### 2. Detector Process (`detector.py`)
 - Implements the pyimagesearch motion detection algorithm from `basic_vmd.py`
 - Maintains `prev_frame` for frame differencing
 - Computes: absdiff → threshold → dilate → findContours
-- Filters contours by minimum area (500)
-- Converts contours to bounding boxes `(x, y, w, h)`
-- Sends `(frame, frame_number, boxes_list)` to presenter queue
+- Sends `(frame, time_ms, contours)` to presenter queue
+- On receiving sentinel: forwards sentinel to presenter, then breaks
 
 ### 3. Presenter Process (`presenter.py`)
-- Receives `(frame, frame_number, boxes)` from detector
-- Draws bounding boxes on frame using `cv2.rectangle`
-- Displays using `cv2.imshow("Motion Detection", frame)`
-- Handles 'q' key press to signal shutdown
+- Receives `(frame, time_ms, contours)` from detector
+- Either blurs (pixelates) contour bounding boxes or draws contours via `cv2.drawContours`
+- Displays using `cv2.imshow("Motion Detection", frame)` with `cv2.waitKey(33)` (~30 FPS)
+- On receiving sentinel: exits the loop
+- Cleanup in `finally`: calls `cv2.destroyAllWindows()`
 
 ### 4. Main Orchestrator (`main.py`)
-- Creates queues: `streamer_to_detector`, `detector_to_presenter`, `control_queue`
-- Spawns 3 processes
-- Handles graceful shutdown on 'q' or video end
-- Joins all processes
+- Creates two queues: `streamer_to_detector`, `detector_to_presenter`
+- Spawns 3 processes (Streamer, Detector, Presenter)
+- Handles graceful shutdown on SIGINT (Ctrl+C) and SIGTERM via signal handler
+  - Signal handler calls `shutdown()` which terminates alive processes and joins with timeout
+- Waits for all processes to complete via `p.join()`
+- Normal completion flow: Streamer → sentinel → Detector → sentinel → Presenter → exit
 
 ### 5. Shared Utilities (`utils.py`)
-- `SENTINEL` sentinel value to signal end of stream
+- `SENTINEL = None` sentinel value to signal end of stream
 
 ## File Structure
 ```
@@ -62,9 +66,11 @@ axon/
 
 ## Key Design Decisions
 - **multiprocessing.Queue** for IPC (simple, process-safe)
-- **cv2.imshow** for real-time display
-- **'q' key** for manual quit, auto-quit at video end
-- **Bounding boxes (x,y,w,h) list** as detection output
+- **cv2.imshow** for real-time display (presenter only — other processes don't open windows)
+- **SIGINT/SIGTERM signal handler** for graceful shutdown (terminate + join with 2s timeout)
+- **Sentinel-based** pipeline shutdown: streamer sends sentinel → detector forwards it → presenter exits
+- **Contours** (not bounding boxes) as detection output — presenter either draws them or pixelates their bounding boxes
+- **cv2.destroyAllWindows()** only called in presenter (the only process that opens a window)
 - **Simplified**: no extra configuration parameters; algorithm values hardcoded per pyimagesearch reference
 
 ## Dependencies
@@ -81,4 +87,4 @@ The algorithm:
 3. Threshold the difference (25)
 4. Dilate to fill holes (2 iterations)
 5. Find contours
-6. Filter by area (500) and convert to bounding boxes
+6. Filter by area (500)
