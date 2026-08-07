@@ -4,7 +4,7 @@ A Python multiprocessing application that performs real-time motion detection on
 
 ## Architecture
 
-A 3-process pipeline connected by `multiprocessing.Queue`:
+A 3-process pipeline connected by `multiprocessing.Pipe`:
 
 ```
 ┌──────────┐   (frame, time_ms)    ┌──────────┐   (frame, time_ms, contours)    ┌──────────┐
