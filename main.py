@@ -31,26 +31,34 @@ def main():
 
     print(f"Motion Detection System - Processing: {video_path}")
 
-    # Create queues for inter-process communication
-    streamer_to_detector = mp.Queue()
-    detector_to_presenter = mp.Queue()
+    # Create pipes for inter-process communication.
+    # mp.Pipe(duplex=False) returns (conn1, conn2) where conn1 is
+    # read-only and conn2 is write-only — perfect for our unidirectional
+    # pipeline: Streamer -> Detector -> Presenter.
+    # Each pipe gives us natural backpressure: if the reader is slow the
+    # writer blocks instead of buffering frames in memory.
+    streamer_to_detector_r, streamer_to_detector_w = mp.Pipe(duplex=False)
+    detector_to_presenter_r, detector_to_presenter_w = mp.Pipe(duplex=False)
 
     # Create processes
+    # Streamer writes frames to the detector pipe
     streamer_proc = mp.Process(
         target=run_streamer,
-        args=(video_path, streamer_to_detector),
+        args=(video_path, streamer_to_detector_w),
         name="Streamer"
     )
 
+    # Detector reads from the streamer pipe, writes results to the presenter pipe
     detector_proc = mp.Process(
         target=run_detector,
-        args=(streamer_to_detector, detector_to_presenter),
+        args=(streamer_to_detector_r, detector_to_presenter_w),
         name="Detector"
     )
 
+    # Presenter reads from the detector pipe
     presenter_proc = mp.Process(
         target=run_presenter,
-        args=(detector_to_presenter, blur),
+        args=(detector_to_presenter_r, blur),
         name="Presenter"
     )
 
@@ -81,8 +89,8 @@ def main():
 
     # Wait for processes to complete.
     # Normal flow: Streamer finishes video -> sends sentinel -> exits.
-    # Detector consumes all queued frames -> forwards sentinel -> exits.
-    # Presenter consumes all queued frames -> exits.
+    # Detector consumes all piped frames -> forwards sentinel -> exits.
+    # Presenter consumes all piped frames -> exits.
     print("[Main] All processes running. Waiting for completion...")
     for p in processes:
         p.join()

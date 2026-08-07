@@ -9,12 +9,16 @@ A Python multiprocessing application with three processes:
 ## Architecture
 
 ```
-┌─────────────┐     Queue      ┌─────────────┐     Queue      ┌─────────────┐
+┌─────────────┐     Pipe        ┌─────────────┐     Pipe       ┌─────────────┐
 │  Streamer   │ ────────────▶ │  Detector   │ ────────────▶ │  Presenter  │
 │  (Process)  │  (frame,       │  (Process)  │  (frame,       │  (Process)  │
 │             │   time_ms)      │             │   contours)     │             │
 └─────────────┘                └─────────────┘                └─────────────┘
 ```
+
+Each connection uses an **unidirectional `mp.Pipe(duplex=False)`**:
+- `streamer_to_detector` pipe: Streamer holds the write end, Detector holds the read end.
+- `detector_to_presenter` pipe: Detector holds the write end, Presenter holds the read end.
 
 ## Implementation Details
 
@@ -22,7 +26,7 @@ A Python multiprocessing application with three processes:
 - Opens video file using `cv2.VideoCapture`
 - If video cannot be opened: prints error and returns (sentinel sent via `finally`)
 - Reads frames in a loop
-- Sends `(frame, time_ms)` tuples to detector queue
+- Sends `(frame, time_ms)` tuples to detector via the write end of the `streamer_to_detector` pipe
 - On end of video or error: sends `None` (SENTINEL) sentinel via `finally` block
 - Cleanup in `finally`: sends sentinel, releases `cv2.VideoCapture`
 
@@ -30,7 +34,7 @@ A Python multiprocessing application with three processes:
 - Implements the pyimagesearch motion detection algorithm from `basic_vmd.py`
 - Maintains `prev_frame` for frame differencing
 - Computes: absdiff → threshold → dilate → findContours
-- Sends `(frame, time_ms, contours)` to presenter queue
+- Sends `(frame, time_ms, contours)` to presenter via the write end of the `detector_to_presenter` pipe
 - On receiving sentinel: forwards sentinel to presenter, then breaks
 
 ### 3. Presenter Process (`presenter.py`)
@@ -41,7 +45,7 @@ A Python multiprocessing application with three processes:
 - Cleanup in `finally`: calls `cv2.destroyAllWindows()`
 
 ### 4. Main Orchestrator (`main.py`)
-- Creates two queues: `streamer_to_detector`, `detector_to_presenter`
+- Creates two unidirectional pipes: `streamer_to_detector` (Streamer write → Detector read) and `detector_to_presenter` (Detector write → Presenter read)
 - Spawns 3 processes (Streamer, Detector, Presenter)
 - Handles graceful shutdown on SIGINT (Ctrl+C) and SIGTERM via signal handler
   - Signal handler calls `shutdown()` which terminates alive processes and joins with timeout
@@ -65,7 +69,9 @@ axon/
 ```
 
 ## Key Design Decisions
-- **multiprocessing.Queue** for IPC (simple, process-safe)
+- **multiprocessing.Pipe** (one-way, `duplex=False`) for IPC — each pipe connects exactly
+  one producer to one consumer in the linear pipeline, giving natural backpressure (the
+  sender blocks if the receiver is slow instead of buffering frames in memory)
 - **cv2.imshow** for real-time display (presenter only — other processes don't open windows)
 - **SIGINT/SIGTERM signal handler** for graceful shutdown (terminate + join with 2s timeout)
 - **Sentinel-based** pipeline shutdown: streamer sends sentinel → detector forwards it → presenter exits

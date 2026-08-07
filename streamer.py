@@ -8,9 +8,10 @@ import multiprocessing as mp
 from utils import SENTINEL
 
 
-def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
+def run_streamer(video_path: str, output_conn: mp.connection.Connection) -> None:
     """
-    Streamer process - reads video frames and sends (frame, time_ms) to detector.
+    Streamer process - reads video frames and sends (frame, time_ms) to detector
+    via a one-way pipe.
     """
     print(f"[Streamer] Starting with video: {video_path}")
 
@@ -33,7 +34,7 @@ def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
             time_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
 
             # Send frame to detector
-            output_queue.put((frame, time_ms))
+            output_conn.send((frame, time_ms))
 
     except KeyboardInterrupt:
         print("[Streamer] Interrupted")
@@ -42,5 +43,5 @@ def run_streamer(video_path: str, output_queue: mp.Queue) -> None:
     finally:
         # Send sentinel to signal end of stream
         print("[Streamer] Sending sentinel and exiting")
-        output_queue.put(SENTINEL)
+        output_conn.send(SENTINEL)
         cap.release()

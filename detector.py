@@ -10,10 +10,11 @@ import multiprocessing as mp
 from utils import SENTINEL
 
 
-def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
+def run_detector(input_conn: mp.connection.Connection,
+                 output_conn: mp.connection.Connection) -> None:
     """
-    Detector process - receives frames from streamer, detects motion,
-    sends (frame, time_ms, contours) to presenter.
+    Detector process - receives frames from streamer via a pipe, detects motion,
+    sends (frame, time_ms, contours) to presenter via a pipe.
     """
     print("[Detector] Starting")
 
@@ -21,17 +22,17 @@ def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
 
     try:
         while True:
-            # Get frame from streamer
-            try:
-                msg = input_queue.get(timeout=1.0)
-            except mp.queues.Empty:
+            # Wait for a frame from the streamer (poll with timeout so we can
+            # still respond to KeyboardInterrupt periodically).
+            if not input_conn.poll(timeout=1.0):
                 continue
+
+            msg = input_conn.recv()
 
             # Check for sentinel (end of stream)
             if msg is SENTINEL:
                 print("[Detector] Received sentinel, forwarding and exiting")
-                # Block until sentinel is delivered - presenter will drain the queue
-                output_queue.put(SENTINEL)
+                output_conn.send(SENTINEL)
                 break
 
             frame, time_ms = msg
@@ -42,10 +43,7 @@ def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
             # Initialize previous frame on first iteration
             if prev_frame is None:
                 prev_frame = gray_frame
-                try:
-                    output_queue.put((frame, time_ms, []), timeout=1.0)
-                except mp.queues.Full:
-                    pass
+                output_conn.send((frame, time_ms, []))
                 continue
 
             # Motion detection algorithm (pyimagesearch)
@@ -59,10 +57,7 @@ def run_detector(input_queue: mp.Queue, output_queue: mp.Queue) -> None:
             prev_frame = gray_frame
 
             # Send frame with detected contours to presenter
-            try:
-                output_queue.put((frame, time_ms, cnts), timeout=1.0)
-            except mp.queues.Full:
-                continue
+            output_conn.send((frame, time_ms, cnts))
 
     except KeyboardInterrupt:
         print("[Detector] Interrupted")

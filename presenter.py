@@ -31,20 +31,21 @@ def blur_contours(frame, contours, block_size=10):
     return result
 
 
-def run_presenter(input_queue: mp.Queue, blur: bool = False) -> None:
+def run_presenter(input_conn: mp.connection.Connection, blur: bool = False) -> None:
     """
-    Presenter process - receives (frame, time_ms, contours) from detector,
+    Presenter process - receives (frame, time_ms, contours) from detector via a pipe,
     pixelates (blurs) or draws contours and current time on frames, and displays them.
     """
     print(f"[Presenter] Starting display window: 'Motion Detection' (blur={blur})")
 
     try:
         while True:
-            # Get frame with detections from detector
-            try:
-                msg = input_queue.get(timeout=1.0)
-            except mp.queues.Empty:
+            # Wait for a frame with detections from the detector (poll with
+            # timeout so we can still respond to KeyboardInterrupt periodically).
+            if not input_conn.poll(timeout=1.0):
                 continue
+
+            msg = input_conn.recv()
 
             # Check for sentinel (end of stream)
             if msg is SENTINEL:
