@@ -66,7 +66,7 @@ def run_presenter(input_conn: mp.connection.Connection, blur: bool = False) -> N
 
             # Display frame
             cv2.imshow("Motion Detection", frame)
-            cv2.waitKey(35)  # ~25 FPS
+            cv2.waitKey(39)  # ~25 FPS
 
 
     except KeyboardInterrupt:

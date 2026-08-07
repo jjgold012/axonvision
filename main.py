@@ -33,10 +33,7 @@ def main():
 
     # Create pipes for inter-process communication.
     # mp.Pipe(duplex=False) returns (conn1, conn2) where conn1 is
-    # read-only and conn2 is write-only — perfect for our unidirectional
-    # pipeline: Streamer -> Detector -> Presenter.
-    # Each pipe gives us natural backpressure: if the reader is slow the
-    # writer blocks instead of buffering frames in memory.
+    # read-only and conn2 is write-only 
     streamer_to_detector_r, streamer_to_detector_w = mp.Pipe(duplex=False)
     detector_to_presenter_r, detector_to_presenter_w = mp.Pipe(duplex=False)
 
